@@ -1,3 +1,4 @@
 .svn
 .vscode
 /build
+dependencies.lock
