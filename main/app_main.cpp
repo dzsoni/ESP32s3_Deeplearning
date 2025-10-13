@@ -44,17 +44,25 @@ void camera_stream_task(void *param)
 
         dl::image::img_t img;
         bool img_decoded = false;
+        bool needs_free = false;  // Track if we need to free img.data
         
         if (fb->format == PIXFORMAT_JPEG) {
-            // Decode JPEG from camera to RGB888 for AI processing
             dl::image::jpeg_img_t jpeg_img = {
                 .data = (void *)fb->buf,
                 .data_len = fb->len
             };
-            img = dl::image::sw_decode_jpeg(jpeg_img, dl::image::DL_IMAGE_PIX_TYPE_RGB888);
+            img = dl::image::sw_decode_jpeg(jpeg_img, dl::image::DL_IMAGE_PIX_TYPE_RGB565);
             img_decoded = true;
+            needs_free = true;  // JPEG decoder allocates memory that needs to be freed
         } else if (fb->format == PIXFORMAT_RGB565) {
-            ESP_LOGW(TAG, "RGB565 format - skipping AI processing (conversion not implemented)");
+            img = {
+                .data = (void *) fb->buf,  // Points directly to camera buffer
+                .width = (uint16_t)fb->width,
+                .height = (uint16_t)fb->height,
+                .pix_type = dl::image::DL_IMAGE_PIX_TYPE_RGB565
+            };
+            img_decoded = true;
+            needs_free = false;  // Camera buffer managed by esp_camera_fb_return()
         } else {
             ESP_LOGW(TAG, "Frame %lu: Unsupported pixel format: %d", frame_count, fb->format);
         }
@@ -84,8 +92,10 @@ void camera_stream_task(void *param)
                          frame_count, valid_detections - MAX_DETECTIONS_LOG);
             }
             
-            // Cleanup image buffer
-            heap_caps_free(img.data);
+            // Only free memory if it was allocated by JPEG decoder
+            if (needs_free && img.data != nullptr) {
+                heap_caps_free(img.data);
+            }
         }
         
         // Return camera frame buffer
@@ -146,11 +156,11 @@ extern "C" void app_main(void)
     
     // Clock and frame configuration
     camera_config.xclk_freq_hz = 10000000;     // 10MHz
-    camera_config.frame_size = FRAMESIZE_SVGA;   // 800x600
-    camera_config.pixel_format = PIXFORMAT_JPEG; // JPEG for streaming
+    camera_config.frame_size = FRAMESIZE_VGA;   // 640x480
+    camera_config.pixel_format = PIXFORMAT_RGB565; // RGB565 for direct processing
     camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
     camera_config.fb_location = CAMERA_FB_IN_PSRAM;
-    camera_config.jpeg_quality = 12;           // Good quality vs size balance
+    camera_config.jpeg_quality = 12;           // Not used with RGB565
     camera_config.fb_count = 2;                // Double buffering
     camera_config.sccb_i2c_port = -1;          // Use software I2C
     
@@ -170,7 +180,7 @@ extern "C" void app_main(void)
         s->set_saturation(s, 0);                  // Default saturation
     }
 
-    ESP_LOGI(TAG, "Camera initialized for streaming (Format: JPEG, Size:  SVGA, Quality: 12)");
+    ESP_LOGI(TAG, "Camera initialized for streaming (Format: RGB565, Size: 640x480 VGA)");
 
     // Initialize AI detector
     detector = new CatDetect();
