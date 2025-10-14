@@ -156,7 +156,7 @@ extern "C" void app_main(void)
     
     // Clock and frame configuration
     camera_config.xclk_freq_hz = 10000000;     // 10MHz
-    camera_config.frame_size = FRAMESIZE_VGA;   // 640x480
+    camera_config.frame_size = FRAMESIZE_SVGA;   // VGA = 640x480, SVGA =800x600
     camera_config.pixel_format = PIXFORMAT_RGB565; // RGB565 for direct processing
     camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
     camera_config.fb_location = CAMERA_FB_IN_PSRAM;
